@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐾 遛狗机器人控制台</title>
+  <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 28px; }
+
+    .card {
+      background: #1e2230;
+      border: 1px solid #2d3448;
+      border-radius: 16px;
+      padding: 20px 24px;
+      width: 100%;
+      max-width: 480px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 14px;
+    }
+
+    /* 连接状态 */
+    .conn-row { display: flex; align-items: center; gap: 10px; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #ef4444;
+      transition: background 0.3s;
+    }
+    .dot.connected { background: #22c55e; animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.5; }
+    }
+    input[type="text"] {
+      flex: 1;
+      background: #0f1117;
+      border: 1px solid #2d3448;
+      border-radius: 8px;
+      color: #e2e8f0;
+      padding: 8px 12px;
+      font-size: 0.9rem;
+    }
+    button.small {
+      background: #3b82f6;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    button.small:hover { background: #2563eb; }
+
+    /* 路线选择 */
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .route-btn {
+      background: #0f1117;
+      border: 2px solid #2d3448;
+      border-radius: 12px;
+      color: #94a3b8;
+      padding: 14px 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      font-size: 0.85rem;
+    }
+    .route-btn .icon { font-size: 1.6rem; display: block; margin-bottom: 6px; }
+    .route-btn:hover { border-color: #3b82f6; color: #e2e8f0; }
+    .route-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+    .route-btn.active {
+      border-color: #60a5fa;
+      background: #1d3557;
+      color: #fff;
+    }
+
+    /* 速度滑块 */
+    .speed-row { display: flex; align-items: center; gap: 12px; }
+    input[type="range"] {
+      flex: 1;
+      accent-color: #60a5fa;
+      height: 6px;
+    }
+    .speed-label { font-size: 0.85rem; color: #94a3b8; min-width: 70px; text-align: right; }
+
+    /* 主控按钮 */
+    .ctrl-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .btn-main {
+      border: none;
+      border-radius: 14px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      padding: 18px 0;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-start {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      grid-column: span 2;
+      font-size: 1.25rem;
+      padding: 22px 0;
+    }
+    .btn-start:hover { transform: scale(1.02); filter: brightness(1.1); }
+    .btn-start:disabled { background: #374151; color: #6b7280; cursor: not-allowed; transform: none; }
+
+    .btn-pause  { background: #f59e0b; color: #000; }
+    .btn-stop   { background: #ef4444; color: #fff; }
+    .btn-pause:hover { filter: brightness(1.1); }
+    .btn-stop:hover  { filter: brightness(1.1); }
+    .btn-pause:disabled, .btn-stop:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+
+    /* 完成弹窗 */
+    .modal-mask {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.58);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-mask.show { display: flex; }
+    .modal {
+      background: #1e2230;
+      border: 1px solid #2d3448;
+      border-radius: 18px;
+      padding: 34px 30px 28px;
+      max-width: 360px;
+      width: min(100%, 360px);
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+      animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.78); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    .modal-emoji { font-size: 3.4rem; margin-bottom: 12px; }
+    .modal-title { font-size: 1.25rem; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }
+    .modal-msg   { font-size: 0.95rem; color: #94a3b8; line-height: 1.6; margin-bottom: 24px; white-space: pre-line; }
+    .modal-btn {
+      background: linear-gradient(135deg, #60a5fa, #7c3aed);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 12px 30px;
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+    .modal-btn:hover { filter: brightness(1.12); }
+
+    /* 状态栏 */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #0f1117;
+      border-radius: 10px;
+    }
+    .state-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .state-idle    { background: #1e3a5f; color: #60a5fa; }
+    .state-running { background: #14532d; color: #4ade80; }
+    .state-paused  { background: #451a03; color: #fb923c; }
+    .state-stopped { background: #450a0a; color: #f87171; }
+    .state-done    { background: #1a1a2e; color: #a78bfa; }
+
+    .paw-trail {
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      animation: walk 1.5s steps(4) infinite;
+    }
+    @keyframes walk {
+      0%   { opacity: 1; }
+      25%  { opacity: 0.6; }
+      50%  { opacity: 1; }
+      75%  { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>🐾 遛狗机器人</h1>
+<p class="subtitle">Scout Mini · 自动遛狗控制台</p>
+
+<!-- 连接 -->
+<div class="card">
+  <div class="card-title">机器人连接</div>
+  <div class="conn-row">
+    <div class="dot" id="dot"></div>
+    <input type="text" id="rosIp" placeholder="ws://机器人IP:9090" />
+    <button class="small" onclick="connect()">连接</button>
+  </div>
+  <div style="margin-top:8px; font-size:0.8rem; color:#64748b;" id="connMsg">未连接</div>
+</div>
+
+<!-- 路线 -->
+<div class="card">
+  <div class="card-title">选择路线</div>
+  <div class="route-grid">
+    <button class="route-btn" data-route="home" onclick="selectRoute(this)">
+      <span class="icon">🏠</span>短途如厕
+    </button>
+    <button class="route-btn active" data-route="neighborhood" onclick="selectRoute(this)">
+      <span class="icon">🏘️</span>小区散步
+    </button>
+    <button class="route-btn" data-route="park" onclick="selectRoute(this)">
+      <span class="icon">🌿</span>公园放松
+    </button>
+  </div>
+</div>
+
+<!-- 速度 -->
+<div class="card">
+  <div class="card-title">行走速度</div>
+  <div class="speed-row">
+    <span style="font-size:0.85rem;color:#64748b">慢</span>
+    <input type="range" id="speedSlider" min="2" max="10" value="10"
+           oninput="updateSpeed(this.value)" />
+    <span style="font-size:0.85rem;color:#64748b">快</span>
+    <span class="speed-label" id="speedLabel">× 1.0</span>
+  </div>
+</div>
+
+<!-- 控制 -->
+<div class="card">
+  <div class="card-title">控制</div>
+  <div class="ctrl-grid">
+    <button class="btn-main btn-start" id="btnStart" onclick="sendCmd('start')" disabled>
+      🐕 开始遛狗
+    </button>
+    <button class="btn-main btn-pause" id="btnPause" onclick="togglePause()" disabled>
+      ⏸ 暂停
+    </button>
+    <button class="btn-main btn-stop" id="btnStop" onclick="sendCmd('stop')" disabled>
+      🛑 紧急停止
+    </button>
+  </div>
+</div>
+
+<!-- 完成弹窗 -->
+<div class="modal-mask" id="doneMask" onclick="closeDoneModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-emoji" id="doneEmoji">🐾</div>
+    <div class="modal-title" id="doneTitle">遛狗完成啦！</div>
+    <div class="modal-msg" id="doneMsg"></div>
+    <button class="modal-btn" onclick="closeDoneModal()">好的，辛苦了！</button>
+  </div>
+</div>
+
+<!-- 状态 -->
+<div class="card">
+  <div class="card-title">机器人状态</div>
+  <div class="status-bar">
+    <span id="stateBadge" class="state-badge state-idle">待机</span>
+    <span class="paw-trail" id="pawTrail" style="display:none">🐾🐾🐾</span>
+    <span style="font-size:0.85rem;color:#64748b">路线: <b id="routeInfo">—</b></span>
+    <span style="font-size:0.85rem;color:#64748b">步骤: <b id="stepInfo">—</b></span>
+  </div>
+</div>
+
+<script>
+let ros = null;
+let cmdPub = null;
+let routePub = null;
+let speedPub = null;
+let currentState = 'idle';
+let isPaused = false;
+let lastRoute = 'neighborhood';
+
+const DONE_MSGS = {
+  home: {
+    emoji: '🏠',
+    title: '如厕任务完成！',
+    msg: '宝贝今天很棒哦～\n顺利解决了！回家喝点水、好好休息吧',
+  },
+  neighborhood: {
+    emoji: '🐕',
+    title: '小区散步结束啦！',
+    msg: '宝贝今天的散步很愉快～\n熟悉了楼下的每一个角落，下次再来探索吧！',
+  },
+  park: {
+    emoji: '🌿',
+    title: '公园时光结束～',
+    msg: '宝贝今天在公园玩得开心吗？\n草地的气味一定很香吧，期待下次的公园之旅！',
+  },
+};
+
+const STATE_MAP = {
+  idle:    { label: '待机',   cls: 'state-idle' },
+  running: { label: '行进中', cls: 'state-running' },
+  paused:  { label: '已暂停', cls: 'state-paused' },
+  stopped: { label: '已停止', cls: 'state-stopped' },
+  done:    { label: '完成',   cls: 'state-done' },
+};
+
+function connect() {
+  const url = document.getElementById('rosIp').value.trim();
+  if (ros) { ros.close(); ros = null; }
+
+  ros = new ROSLIB.Ros({ url });
+
+  ros.on('connection', () => {
+    document.getElementById('dot').classList.add('connected');
+    document.getElementById('connMsg').textContent = '已连接：' + url;
+    setupTopics();
+    const activeRoute = document.querySelector('.route-btn.active');
+    if (activeRoute) routePub.publish(new ROSLIB.Message({ data: activeRoute.dataset.route }));
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnStop').disabled = false;
+  });
+
+  ros.on('error', () => {
+    document.getElementById('connMsg').textContent = '连接失败，请检查 IP 和 rosbridge 是否启动';
+  });
+
+  ros.on('close', () => {
+    document.getElementById('dot').classList.remove('connected');
+    document.getElementById('connMsg').textContent = '已断开';
+    disableCtrl();
+  });
+}
+
+function setupTopics() {
+  cmdPub = new ROSLIB.Topic({
+    ros, name: '/dog_walk/command',
+    messageType: 'std_msgs/String'
+  });
+  routePub = new ROSLIB.Topic({
+    ros, name: '/dog_walk/route',
+    messageType: 'std_msgs/String'
+  });
+  speedPub = new ROSLIB.Topic({
+    ros, name: '/dog_walk/speed_scale',
+    messageType: 'std_msgs/Float32'
+  });
+
+  const statusSub = new ROSLIB.Topic({
+    ros, name: '/dog_walk/status',
+    messageType: 'std_msgs/String'
+  });
+  statusSub.subscribe(msg => {
+    try {
+      updateStatus(JSON.parse(msg.data));
+    } catch (err) {
+      console.warn('Bad status payload', err, msg.data);
+    }
+  });
+}
+
+function sendCmd(cmd) {
+  if (!cmdPub) return;
+  cmdPub.publish(new ROSLIB.Message({ data: cmd }));
+}
+
+function togglePause() {
+  if (currentState === 'running') {
+    sendCmd('pause');
+    document.getElementById('btnPause').textContent = '▶ 继续';
+  } else if (currentState === 'paused') {
+    sendCmd('resume');
+    document.getElementById('btnPause').textContent = '⏸ 暂停';
+  }
+}
+
+function selectRoute(el) {
+  if (!['idle','stopped','done'].includes(currentState)) return;
+  document.querySelectorAll('.route-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  if (routePub) routePub.publish(new ROSLIB.Message({ data: el.dataset.route }));
+}
+
+function updateSpeed(val) {
+  const scale = (val / 10).toFixed(1);
+  document.getElementById('speedLabel').textContent = '× ' + scale;
+  if (speedPub) speedPub.publish(new ROSLIB.Message({ data: parseFloat(scale) }));
+}
+
+function showDoneModal(route) {
+  const info = DONE_MSGS[route] || {
+    emoji: '🐾',
+    title: '遛狗完成啦！',
+    msg: '宝贝今天辛苦了，好好休息～',
+  };
+  document.getElementById('doneEmoji').textContent = info.emoji;
+  document.getElementById('doneTitle').textContent = info.title;
+  document.getElementById('doneMsg').textContent = info.msg;
+  document.getElementById('doneMask').classList.add('show');
+}
+
+function closeDoneModal() {
+  document.getElementById('doneMask').classList.remove('show');
+}
+
+function updateStatus(status) {
+  const prevState = currentState;
+  currentState = status.state;
+  if (status.route) lastRoute = status.route;
+  if (prevState !== 'done' && currentState === 'done') {
+    showDoneModal(lastRoute);
+  }
+
+  const info = STATE_MAP[status.state] || { label: status.state, cls: 'state-idle' };
+
+  const badge = document.getElementById('stateBadge');
+  badge.textContent = info.label;
+  badge.className = 'state-badge ' + info.cls;
+
+  const paw = document.getElementById('pawTrail');
+  paw.style.display = status.state === 'running' ? 'inline' : 'none';
+
+  document.getElementById('routeInfo').textContent = status.route || '—';
+  if (status.route) {
+    document.querySelectorAll('.route-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.route === status.route);
+    });
+  }
+  const stepText = status.step_total
+    ? `${status.step_index || 0}/${status.step_total} · ${status.step_action || '—'}`
+    : '—';
+  document.getElementById('stepInfo').textContent = stepText;
+
+  const running = status.state === 'running';
+  const paused  = status.state === 'paused';
+  const canStart = ['idle','stopped','done'].includes(status.state);
+
+  document.getElementById('btnStart').disabled = !canStart;
+  document.getElementById('btnPause').disabled = !running && !paused;
+  document.getElementById('btnStop').disabled  = canStart;
+  document.querySelectorAll('.route-btn').forEach(btn => {
+    btn.disabled = !canStart;
+  });
+
+  if (!paused) document.getElementById('btnPause').textContent = '⏸ 暂停';
+}
+
+function disableCtrl() {
+  ['btnStart','btnPause','btnStop'].forEach(id =>
+    document.getElementById(id).disabled = true
+  );
+}
+
+function initRosUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get('ros') || params.get('ros_url');
+  const port = params.get('ros_port') || '9090';
+  const saved = window.localStorage.getItem('dogWalkRosUrl');
+  const host = window.location.hostname || '127.0.0.1';
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const isPublicScoutPage = host === 'scout.guliwa.com';
+  const defaultUrl = isPublicScoutPage ? '' : `${scheme}://${host}:${port}`;
+  document.getElementById('rosIp').value = fromQuery || saved || defaultUrl;
+}
+
+const originalConnect = connect;
+connect = function() {
+  const url = document.getElementById('rosIp').value.trim();
+  window.localStorage.setItem('dogWalkRosUrl', url);
+  originalConnect();
+};
+
+// 自动尝试连接
+window.addEventListener('load', () => {
+  initRosUrl();
+  connect();
+});
+</script>
+</body>
+</html>

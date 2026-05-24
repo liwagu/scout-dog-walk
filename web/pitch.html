@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scout Dog Walk Pitch</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      color: #172033;
+      background: #f6f8fb;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px 72px;
+    }
+    a { color: #2563eb; font-weight: 700; }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 42px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 36px 0 12px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+    .lead {
+      font-size: 20px;
+      color: #475569;
+    }
+    .box {
+      border: 1px solid #d7dde8;
+      border-radius: 8px;
+      padding: 18px 20px;
+      background: #fff;
+    }
+    li { margin: 8px 0; }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #eaf1ff;
+      color: #1e3a8a;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a href="./showcase.html">返回展示页</a>
+    <h1>Scout Dog Walk 路演稿</h1>
+    <p class="lead">我们没有假装做出全自动遛狗机器人。我们做的是一个诚实的、可监督的机器人能力验证：网页控制台发出路线和速度指令，ROS2 节点把它变成 `/cmd_vel`，Scout Mini 真实移动。</p>
+
+    <h2>一句话</h2>
+    <div class="box">把一个只有底盘能力的 Scout Mini，变成一个可监督、可暂停、可急停的“遛狗”路线机器人。</div>
+
+    <h2>现场演示</h2>
+    <ol>
+      <li>展示 Scout Mini 底盘和网页控制台。</li>
+      <li>连接 rosbridge：<code>ws://robot-ip:9090</code>。</li>
+      <li>选择直线往返路线，降低速度。</li>
+      <li>点击开始，机器人按路线移动。</li>
+      <li>中途暂停，再继续。</li>
+      <li>最后触发紧急停止。</li>
+    </ol>
+
+    <h2>技术链路</h2>
+    <div class="box">Web UI -> ROSLIB.js -> rosbridge -> dog_walk_node.py -> /cmd_vel -> scout_base_node -> SocketCAN can0 -> Scout Mini chassis</div>
+
+    <h2>边界</h2>
+    <ul>
+      <li>不是自动导航。</li>
+      <li>不是产品级宠物看护。</li>
+      <li>公网只放展示页，不裸露机器人控制接口。</li>
+      <li>现场必须低速、有人看护、保留急停。</li>
+    </ul>
+
+    <h2>收尾句</h2>
+    <div class="box">这个 Demo 的价值不是“替代人类照护”，而是把一个重复、体力化的 care routine，变成一个可被机器人系统承接和监督的最小闭环。</div>
+  </main>
+</body>
+</html>
